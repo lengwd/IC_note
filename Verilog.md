@@ -190,6 +190,8 @@
 
 ## 六、低功耗设计（降低翻转频率）
 
+参考资料：https://zhuanlan.zhihu.com/p/640735516
+
 ### 6.1 **目的**
 
 > (1). 便携式设备的需求
@@ -445,6 +447,8 @@
 
 ## 九、状态机
 
+参考资料：https://zhuanlan.zhihu.com/p/72462872
+
 ### 9.1 状态机写法-三段式
 
 > - 状态跳转逻辑 （always@(*) case）
@@ -576,8 +580,157 @@
 >
 > PSTRB:(PBA strobe) 表示稀疏写, 4bit 如果 4'b1000 则表述只写入最高位
 
-### 11.2 AHB
+### 11.2 AHB-Lite
 
 #### 11.2.0 术语补充
 
 > 1KB边界对齐就是：每个Slave的基地址必须是1024字节的整数倍（低10位全0）。
+
+#### 11.2.1 信号
+
+AHB中的信号 以H开头 
+
+AHB信号 多个master 和 多个 slave 之间信息的传输
+
+AHB-Lite 是简化版 单个master和多个slave之间的传输
+
+（1）全局信号
+
+> HCLK
+>
+> HRESETn
+
+（2）master 信号
+
+> 控制信号 :
+>
+> HADDR
+>
+> HWRITE
+>
+> 数据信号：
+>
+> HWDATA
+>
+> 数据描述信号：
+>
+> HBURST 突发传输 （还不懂）
+>
+> HMASTERLOCK (原子操作)
+>
+> HPORT: 信号类型 保护控制信号
+>
+> HTRANS: 传输类型（懂）
+>
+> HSIZE：信号大小
+
+（3）slave
+
+> HRDATA
+>
+> HREADYOUT
+>
+> HPESP: 高为正常， 低为不正常
+
+（4）decoder
+
+> HSELx
+
+（5）MUX
+
+> HDATA
+>
+> HREADYOUT
+>
+> HRESP
+
+#### 11.2.2 AHB-Lite 控制信号
+
+> 连接:https://zhuanlan.zhihu.com/p/630647524
+
+(1) 传输类别
+
+> IDEL
+>
+> BUSY
+>
+> NONSEQ
+>
+> SEQ
+
+(2) locked transfer
+
+和（4）一样是一种操作，通过MASTERLOCKED信号，来避免多个master访问一个slave带来的时序错误
+
+(3)tranfer size
+
+从 000 为 8bit 开始递增 每增加1 乘2 例如 010 是32bit
+
+(4)burst operation
+
+是一种把多笔transfer打包为整体的操作
+
+SINGLE: 1笔 可以是IDEL NONSEQ
+
+INCR: 非定常 不可以跨越1kb边界
+
+INCRx: x 是 4 8 16 不可以跨越1kb边界
+
+WRAPx: cache line 4 8 16笔transfer
+
+> 补充1：跨域边界指的是 一个地址的不能超过1k范围 这样会超过一个slave到另一个slave
+>
+> 补充2：cache line（缓存行）是缓存（Cache）中数据存储和传输的基本单位。 “一大块数据”就叫cache line，常见长度有32字节、64字节等。
+>
+> 补充3：什么是 critical word first（关键字优先）
+>
+> 当CPU访问某个地址（比如0x1008），发现Cache里没有，就要从内存取一整行（比如0x1000~0x103F）。
+>
+> 但CPU最着急用的是0x1008这个“关键字”（critical word），如果等全行都读完才给CPU，会慢。
+>
+> critical word first就是先把CPU需要的那一部分（0x1008~0x100B）优先传给CPU，剩下的再慢慢传。
+
+能用BURST就用BURST
+
+> 突发传输：一次命令，连续读一大块，效率高，延迟低。
+>
+> 单次传输：多次命令，分开读，效率低，延迟高。
+>
+> 突发传输像是你告诉快递员：“请把我家门口的8个包裹一起搬到我家里。”快递员一次性搬完，很快。
+>
+> 单次传输像是你每次只让快递员搬一个包裹，搬完一个再通知他下一个，他每次都要重新跑一趟，效率很低。
+
+#### 11.2.3 AHB-Lite slave信号
+
+> 链接：https://zhuanlan.zhihu.com/p/631208951
+
+(1) HREADY 与 HRESP
+
+这两个信号代表组成四个状态
+
+> 10: 成功传输
+>
+> 00: slave 反压主机 等待slave处理信号
+>
+> 10：出错了 处理错误中
+>
+> 11：出错了 错误处理完成
+
+错误处理操作：
+
+> slave发现要出错了，加入一个00（等待）
+>
+> 然后分别加入以一个10和11来表示错误处理
+
+（2）HPORT 保护信号
+
+HPORT[0]: 取数据还是取指令
+
+HPORT[1]：特权\非特权
+
+HPORT[2]：bufferable
+
+HPORT[3]：cacheable
+
+> 补充：
+> 对于写具有严格的先后顺序之分的地址空间，一般是Non-cacheable和Non-bufferable，否则可能会乱序。
